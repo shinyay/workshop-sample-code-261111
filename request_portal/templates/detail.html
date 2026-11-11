@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ record.title }}{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('request_list') }}">← 申請一覧へ戻る</a>
+<div class="page-heading">
+  <div><p class="eyebrow">REQUEST #{{ "%03d"|format(record.id) }}</p>
+    <h1>{{ record.title }}</h1><p class="lead">{{ kinds[record.kind] }}</p></div>
+  <span class="status-badge status-{{ record.status }}">{{ statuses[record.status] }}</span>
+</div>
+<div class="detail-grid">
+  <section class="card detail-content" aria-labelledby="content-heading">
+    <h2 id="content-heading">申請内容</h2>
+    <p class="request-description">{{ record.details }}</p>
+    <dl class="detail-metadata">
+      <div><dt>申請者</dt><dd>{{ record.applicant }}</dd></div>
+      <div><dt>担当部署</dt><dd>{{ departments[record.department] }}</dd></div>
+      <div><dt>申請日時</dt><dd><time datetime="{{ record.created_at }}">{{ record.created_at|japan_time }}</time></dd></div>
+    </dl>
+  </section>
+  <aside class="card decision-card" aria-labelledby="decision-heading">
+    <h2 id="decision-heading">申請の処理</h2>
+    {% if record.status == 'pending' %}
+    <p>内容を確認し、承認または差し戻しを選択してください。</p>
+    <form method="post" action="{{ url_for('request_decision', request_id=record.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="button button-primary" type="submit" name="status" value="approved">承認する</button>
+      <button class="button button-secondary" type="submit" name="status" value="rejected">差し戻す</button>
+    </form>
+    <p class="helper-text">研修では処理後の変更・再申請は扱いません。</p>
+    {% else %}
+    <p class="processed-message">この申請は「{{ statuses[record.status] }}」です。</p>
+    <p class="helper-text">処理済みの申請は変更できません。新しい操作は別の架空申請で試してください。</p>
+    {% endif %}
+    <div class="demo-boundary">これは研修用の状態変更です。実際の承認権限や通知はありません。</div>
+  </aside>
+</div>
+{% endblock %}

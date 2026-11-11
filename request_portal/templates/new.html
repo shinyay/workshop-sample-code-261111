@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}新規申請{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('request_list') }}">← 申請一覧へ戻る</a>
+<div class="page-heading">
+  <div><p class="eyebrow">NEW REQUEST</p><h1>新規申請</h1>
+    <p class="lead">架空の内容を入力してください。登録後は「確認待ち」になります。</p></div>
+</div>
+<section class="card form-card" aria-label="申請入力">
+  {% if errors %}
+  <div class="notice notice-error" role="alert">
+    <strong>入力内容を確認してください。</strong>
+    <ul>{% for field, message in errors.items() %}<li><a href="#{{ field }}">{{ message }}</a></li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  <form method="post" action="{{ url_for('request_new') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for field, label, maximum in [('title', '件名', 80), ('applicant', '申請者名（架空）', 40)] %}
+    <div class="field">
+      <label for="{{ field }}">{{ label }} <span class="required-label">必須</span></label>
+      <input id="{{ field }}" name="{{ field }}" type="text" maxlength="{{ maximum }}" required
+             value="{{ values.get(field, '') }}" autocomplete="off"
+             aria-describedby="{{ field }}-hint{% if field in errors %} {{ field }}-error{% endif %}"
+             {% if field in errors %}aria-invalid="true"{% endif %}>
+      <p id="{{ field }}-hint" class="helper-text">1〜{{ maximum }}文字</p>
+      {% if field in errors %}<p id="{{ field }}-error" class="field-error">{{ errors[field] }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    <div class="form-columns">
+      {% for field, label, choices in [('department', '担当部署', departments), ('kind', '申請種別', kinds)] %}
+      <div class="field">
+        <label for="{{ field }}">{{ label }} <span class="required-label">必須</span></label>
+        <select id="{{ field }}" name="{{ field }}" required
+                {% if field in errors %}aria-invalid="true" aria-describedby="{{ field }}-error"{% endif %}>
+          <option value="">選択してください</option>
+          {% for value, choice in choices.items() %}
+          <option value="{{ value }}" {% if values.get(field) == value %}selected{% endif %}>{{ choice }}</option>
+          {% endfor %}
+        </select>
+        {% if field in errors %}<p id="{{ field }}-error" class="field-error">{{ errors[field] }}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="field">
+      <label for="details">申請内容 <span class="required-label">必須</span></label>
+      <textarea id="details" name="details" rows="6" minlength="10" maxlength="1000" required
+                aria-describedby="details-hint{% if 'details' in errors %} details-error{% endif %}"
+                {% if 'details' in errors %}aria-invalid="true"{% endif %}>{{ values.get('details', '') }}</textarea>
+      <p id="details-hint" class="helper-text">目的や必要な内容を、10〜1000文字で入力してください。</p>
+      {% if 'details' in errors %}<p id="details-error" class="field-error">{{ errors['details'] }}</p>{% endif %}
+    </div>
+    <div class="form-actions">
+      <button class="button button-primary" type="submit">申請を登録</button>
+      <a class="button button-secondary" href="{{ url_for('request_list') }}">キャンセル</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

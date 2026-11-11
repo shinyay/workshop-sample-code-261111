@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}操作を確認してください{% endblock %}
+{% block content %}
+<section class="card error-card" aria-labelledby="error-heading">
+  <p class="eyebrow">ERROR {{ code }}</p>
+  <h1 id="error-heading">操作を完了できませんでした</h1>
+  <p role="alert">{{ message }}</p>
+  <a class="button button-primary" href="{{ url_for('request_list') }}">申請一覧へ戻る</a>
+</section>
+{% endblock %}

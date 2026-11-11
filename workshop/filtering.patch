@@ -1,0 +1,262 @@
+diff --git a/request_portal/__init__.py b/request_portal/__init__.py
+--- a/request_portal/__init__.py
++++ b/request_portal/__init__.py
+@@ -33,7 +33,7 @@
+     validate_new_request,
+ )
+ 
+-WORKSHOP_STAGE = "starter"
++WORKSHOP_STAGE = "reference"
+ _ERROR_MESSAGES = {
+     400: "指定された内容を確認してください。",
+     403: "操作を確認できませんでした。ページを再読み込みして、もう一度操作してください。",
+@@ -83,7 +83,7 @@
+ def _validate_query_keys(allowed: set[str]) -> None:
+     for key in request.args:
+         if key not in allowed | {"scoutTheme"}:
+-            _fail(400, "初期アプリは検索条件に対応していません。演習で追加する機能です。")
++            _fail(400, "対応していない検索条件が指定されています。")
+         if len(request.args.getlist(key)) != 1:
+             _fail(400, "同じ検索条件を複数指定することはできません。")
+     if request.args.get("scoutTheme", "") not in {"", "light", "dark"}:
+@@ -156,8 +156,14 @@
+         return render_template("error.html", code=code, message=message), code
+ 
+     def read_requests() -> list[PortalRequest]:
+-        _validate_query_keys(set())
+-        return storage.list_requests(database_path)
++        _validate_query_keys({"department", "status"})
++        department = request.args.get("department", "")
++        status = request.args.get("status", "")
++        if department and department not in DEPARTMENTS:
++            _fail(400, "担当部署の値が正しくありません。選択肢から指定してください。")
++        if status and status not in STATUSES:
++            _fail(400, "申請状態の値が正しくありません。選択肢から指定してください。")
++        return storage.list_requests(database_path, department=department, status=status)
+ 
+     def find_request(request_id: int) -> PortalRequest:
+         record = storage.get_request(database_path, request_id)
+diff --git a/request_portal/storage.py b/request_portal/storage.py
+--- a/request_portal/storage.py
++++ b/request_portal/storage.py
+@@ -95,10 +95,20 @@
+     )
+ 
+ 
+-def list_requests(path: Path) -> list[PortalRequest]:
++def list_requests(path: Path, *, department: str = "", status: str = "") -> list[PortalRequest]:
++    clauses: list[str] = []
++    parameters: list[str] = []
++    if department:
++        clauses.append("department = ?")
++        parameters.append(department)
++    if status:
++        clauses.append("status = ?")
++        parameters.append(status)
++    where = " WHERE " + " AND ".join(clauses) if clauses else ""
+     with connection(path) as database:
+         rows = database.execute(
+-            f"SELECT {_COLUMNS} FROM requests ORDER BY created_at DESC, id DESC"
++            f"SELECT {_COLUMNS} FROM requests{where} ORDER BY created_at DESC, id DESC",
++            parameters,
+         ).fetchall()
+     return [_record(row) for row in rows]
+ 
+diff --git a/request_portal/templates/list.html b/request_portal/templates/list.html
+--- a/request_portal/templates/list.html
++++ b/request_portal/templates/list.html
+@@ -17,6 +17,27 @@
+   </div>
+ </section>
+ <section class="card request-card" aria-labelledby="list-heading">
++  <form class="filter-form" method="get" action="{{ url_for('request_list') }}" aria-label="申請の絞り込み">
++    {% if query.get('scoutTheme') %}
++    <input type="hidden" name="scoutTheme" value="{{ query.get('scoutTheme') }}">
++    {% endif %}
++    {% for field, label, choices, all_label in [
++      ('department', '担当部署', departments, 'すべての部署'),
++      ('status', '申請状態', statuses, 'すべての状態')
++    ] %}
++    <div class="field">
++      <label for="filter-{{ field }}">{{ label }}</label>
++      <select id="filter-{{ field }}" name="{{ field }}">
++        <option value="">{{ all_label }}</option>
++        {% for value, choice in choices.items() %}
++        <option value="{{ value }}" {% if query.get(field) == value %}selected{% endif %}>{{ choice }}</option>
++        {% endfor %}
++      </select>
++    </div>
++    {% endfor %}
++    <button class="button button-primary" type="submit">絞り込む</button>
++    <a class="button button-secondary" href="{{ url_for('request_list') }}">条件を解除</a>
++  </form>
+   <div class="list-heading">
+     <h2 id="list-heading">届いている申請</h2>
+     <span class="result-count" aria-live="polite">{{ records|length }}件を表示</span>
+@@ -46,8 +67,13 @@
+   <div class="empty-state" role="status">
+     <span class="empty-mark" aria-hidden="true">□</span>
+     <h3>表示する申請はありません</h3>
++    {% if query.get('department') or query.get('status') %}
++    <p>指定した条件に一致する申請はありません。条件を変更するか、解除してください。</p>
++    <a class="button button-primary" href="{{ url_for('request_list') }}">条件を解除する</a>
++    {% else %}
+     <p>まだ申請が登録されていません。新規申請から、架空の申請を追加できます。</p>
+     <a class="button button-primary" href="{{ url_for('request_new') }}">新規申請を作成</a>
++    {% endif %}
+   </div>
+   {% endif %}
+ </section>
+diff --git a/request_portal/static/portal.css b/request_portal/static/portal.css
+--- a/request_portal/static/portal.css
++++ b/request_portal/static/portal.css
+@@ -113,6 +113,9 @@
+ .skip-link { position: absolute; left: 16px; top: -100px; padding: 12px 20px; background: var(--cp-surface); color: var(--cp-accent); z-index: 10; }
+ .skip-link:focus { top: 12px; }
+ .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
++.filter-form { display: flex; align-items: end; gap: 16px; padding: 24px; border-bottom: 1px solid var(--cp-border); flex-wrap: wrap; }
++.filter-form .field { flex: 1 1 180px; margin: 0; }
++.filter-form .button { margin-bottom: 0; }
+ @media (max-width: 760px) {
+   .shell { width: calc(100% - 32px); }
+   .header-inner { align-items: start; flex-direction: column; gap: 12px; padding-block: 20px; }
+@@ -126,4 +129,5 @@
+   th, td { padding: 12px 16px; }
+   table { min-width: 660px; }
+   .form-actions { flex-wrap: wrap; }
++  .filter-form { padding: 20px; }
+ }
+diff --git a/tests/test_filtering.py b/tests/test_filtering.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_filtering.py
+@@ -0,0 +1,129 @@
++import re
++from urllib.parse import urlencode
++
++import pytest
++from flask.testing import FlaskClient
++
++EXPECTED_PAIRS = [
++    ("engineering", "pending", [1]),
++    ("engineering", "approved", [5]),
++    ("engineering", "rejected", [9]),
++    ("sales", "pending", [6]),
++    ("sales", "approved", [2]),
++    ("sales", "rejected", [10]),
++    ("corporate", "pending", [11, 3]),
++    ("corporate", "approved", [7]),
++    ("corporate", "rejected", []),
++    ("design", "pending", [8]),
++    ("design", "approved", [12]),
++    ("design", "rejected", [4]),
++]
++
++
++def assert_listing(client: FlaskClient, parameters: dict[str, str], expected: list[int]) -> None:
++    query = urlencode(parameters)
++    api = client.get(f"/api/requests?{query}")
++    assert api.status_code == 200
++    payload = api.get_json()
++    assert payload["count"] == len(payload["items"]) == len(expected)
++    assert [item["id"] for item in payload["items"]] == expected
++    response = client.get(f"/requests?{query}")
++    assert response.status_code == 200
++    page = response.get_data(as_text=True)
++    assert f"{len(expected)}件を表示" in page
++    assert [int(value) for value in re.findall(r"#(\d+) ·", page)] == expected
++    for item in payload["items"]:
++        assert item["title"] in page
++
++
++@pytest.mark.parametrize(("department", "status", "expected"), EXPECTED_PAIRS)
++def test_combined_filters_use_and_in_ui_and_api(
++    client: FlaskClient,
++    department: str,
++    status: str,
++    expected: list[int],
++) -> None:
++    assert_listing(client, {"department": department, "status": status}, expected)
++
++
++@pytest.mark.parametrize(
++    ("parameters", "expected"),
++    [
++        ({}, list(range(12, 0, -1))),
++        ({"department": "", "status": ""}, list(range(12, 0, -1))),
++        ({"department": "engineering"}, [9, 5, 1]),
++        ({"department": "sales"}, [10, 6, 2]),
++        ({"department": "corporate"}, [11, 7, 3]),
++        ({"department": "design"}, [12, 8, 4]),
++        ({"status": "pending"}, [11, 8, 6, 3, 1]),
++        ({"status": "approved"}, [12, 7, 5, 2]),
++        ({"status": "rejected"}, [10, 9, 4]),
++        ({"department": "", "status": "approved"}, [12, 7, 5, 2]),
++        ({"department": "engineering", "status": ""}, [9, 5, 1]),
++        ({"department": "engineering", "status": "pending", "scoutTheme": "dark"}, [1]),
++    ],
++)
++def test_single_empty_and_theme_conditions(
++    client: FlaskClient,
++    parameters: dict[str, str],
++    expected: list[int],
++) -> None:
++    assert_listing(client, parameters, expected)
++
++
++def test_selected_conditions_and_global_summary_remain_visible(client: FlaskClient) -> None:
++    response = client.get("/requests?department=engineering&status=pending")
++    page = response.get_data(as_text=True)
++    assert re.search(r'<option value="engineering"\s+selected>', page)
++    assert re.search(r'<option value="pending"\s+selected>', page)
++    assert [int(value) for value in re.findall(r"<strong>(\d+)<small>件", page)] == [12, 5, 4, 3]
++    assert 'href="/requests">条件を解除</a>' in page
++
++
++def test_no_matches_has_explanation_and_clear_action(client: FlaskClient) -> None:
++    response = client.get("/requests?department=corporate&status=rejected")
++    assert response.status_code == 200
++    page = response.get_data(as_text=True)
++    assert "0件を表示" in page
++    assert "指定した条件に一致する申請はありません" in page
++    assert "条件を解除する" in page
++    assert "まだ申請が登録されていません" not in page
++    assert client.get("/api/requests?department=corporate&status=rejected").get_json() == {
++        "items": [],
++        "count": 0,
++    }
++
++
++@pytest.mark.parametrize(
++    "query",
++    [
++        "department=unknown",
++        "status=unknown",
++        "status=Pending",
++        "department=engineering&department=sales",
++        "status=pending&status=approved",
++        "department=&department=engineering",
++        "status=&status=",
++        "department=engineering&unexpected=x",
++        "department=engineering%27%20OR%201%3D1--",
++        "status=%3Cscript%3E",
++        "department=%20engineering",
++        "status=0",
++    ],
++)
++@pytest.mark.parametrize("path", ["/requests", "/api/requests"])
++def test_invalid_filters_return_400_without_changing_data(
++    client: FlaskClient,
++    path: str,
++    query: str,
++) -> None:
++    response = client.get(f"{path}?{query}")
++    assert response.status_code == 400
++    if path.startswith("/api/"):
++        error = response.get_json()["error"]
++        assert error["code"] == 400
++        assert error["message"]
++        assert "items" not in response.get_json()
++    else:
++        assert 'role="alert"' in response.get_data(as_text=True)
++    assert client.get("/api/requests").get_json()["count"] == 12

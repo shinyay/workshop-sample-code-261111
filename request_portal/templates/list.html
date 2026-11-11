@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}申請一覧{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><p class="eyebrow">REQUESTS</p><h1>申請一覧</h1>
+    <p class="lead">届いている申請の内容と、処理状況を確認できます。</p></div>
+  <a class="button button-primary" href="{{ url_for('request_new') }}">＋ 新規申請</a>
+</div>
+<section aria-labelledby="summary-heading">
+  <h2 id="summary-heading" class="section-caption">すべての申請の集計</h2>
+  <div class="summary-grid">
+    <div class="summary-card"><span>申請総数</span><strong>{{ total }}<small>件</small></strong></div>
+    {% for status, label in statuses.items() %}
+    <div class="summary-card"><span class="status-label status-{{ status }}">{{ label }}</span>
+      <strong>{{ counts[status] }}<small>件</small></strong></div>
+    {% endfor %}
+  </div>
+</section>
+<section class="card request-card" aria-labelledby="list-heading">
+  <div class="list-heading">
+    <h2 id="list-heading">届いている申請</h2>
+    <span class="result-count" aria-live="polite">{{ records|length }}件を表示</span>
+  </div>
+  {% if records %}
+  <div class="table-scroll" role="region" aria-label="申請一覧の表" tabindex="0">
+    <table>
+      <caption class="visually-hidden">新しい申請から順に表示しています。</caption>
+      <thead><tr>
+        <th scope="col">申請</th><th scope="col">申請者・担当部署</th>
+        <th scope="col">状態</th><th scope="col">申請日時</th>
+      </tr></thead>
+      <tbody>
+      {% for record in records %}
+        <tr>
+          <td><a class="request-title" href="{{ url_for('request_detail', request_id=record.id) }}">{{ record.title }}</a>
+            <span class="cell-subtitle">#{{ "%03d"|format(record.id) }} · {{ kinds[record.kind] }}</span></td>
+          <td>{{ record.applicant }}<span class="cell-subtitle">{{ departments[record.department] }}</span></td>
+          <td><span class="status-badge status-{{ record.status }}">{{ statuses[record.status] }}</span></td>
+          <td class="date-cell"><time datetime="{{ record.created_at }}">{{ record.created_at|japan_time }}</time></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state" role="status">
+    <span class="empty-mark" aria-hidden="true">□</span>
+    <h3>表示する申請はありません</h3>
+    <p>まだ申請が登録されていません。新規申請から、架空の申請を追加できます。</p>
+    <a class="button button-primary" href="{{ url_for('request_new') }}">新規申請を作成</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

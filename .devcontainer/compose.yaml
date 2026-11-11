@@ -1,0 +1,15 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: vscode
+    init: true
+    working_dir: /workspaces/request-portal
+    command: ["sleep", "infinity"]
+    environment:
+      UV_PROJECT_ENVIRONMENT: /home/vscode/.venv
+    volumes:
+      - type: bind
+        source: ..
+        target: /workspaces/request-portal

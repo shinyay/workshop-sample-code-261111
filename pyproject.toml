@@ -1,0 +1,38 @@
+[project]
+name = "request-portal"
+version = "0.1.0"
+description = "A local-only, fictional request portal for a Copilot workshop."
+requires-python = ">=3.13,<3.15"
+dependencies = ["flask>=3.1,<4"]
+
+[dependency-groups]
+dev = ["pytest>=8.4,<10", "ruff>=0.13,<1", "mypy>=1.18,<2"]
+browser = ["playwright>=1.55,<2"]
+
+[tool.uv]
+package = false
+
+[[tool.uv.index]]
+name = "public-pypi"
+url = "https://pypi.org/simple"
+default = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.13"
+files = ["request_portal"]
+strict = true
